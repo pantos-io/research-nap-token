@@ -61,13 +61,13 @@ contract('NapToken', (accounts) => {
    });
 
    it('should not burn tokens if destination chain is zero address', async () => {
-      await expectRevert(sourceNapToken.transferToChain(accounts[0], constants.ZERO_ADDRESS, web3.utils.toWei('2', 'ether')), 'contract address must not be zero address');
+      await expectRevert(sourceNapToken.transferToChain(accounts[0], constants.ZERO_ADDRESS, web3.utils.toWei('1', 'ether')), 'contract address is not registered');
       const balance = await sourceNapToken.balanceOf(accounts[0]);
       expect(balance).to.be.bignumber.equal(ether('1'));
    });
 
    it('should not burn tokens if destination chain does not exist', async () => {
-      await expectRevert(sourceNapToken.transferToChain(accounts[0], sourceNapToken.address, web3.utils.toWei('2', 'ether')), 'contract address is not registered');
+      await expectRevert(sourceNapToken.transferToChain(accounts[0], sourceNapToken.address, web3.utils.toWei('1', 'ether')), 'contract address is not registered');
       const balance = await sourceNapToken.balanceOf(accounts[0]);
       expect(balance).to.be.bignumber.equal(ether('1'));
    });

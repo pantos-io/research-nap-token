@@ -66,7 +66,6 @@ contract NapToken is ERC20, ERC20Detailed {
     }
 
     function transferToChain(address recipient, address destinationContract, uint value) public {
-        require(destinationContract != address(0), "contract address must not be zero address");
         require(destinationContract == otherContract, "contract address is not registered");
         _burn(msg.sender, value);
         emit ChainTransfer(address(this), destinationContract, recipient);
