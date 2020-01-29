@@ -36,7 +36,7 @@ contract NapToken is ERC20, ERC20Detailed {
     ) public payable {
         // parse transaction
         RLPReader.RLPItem[] memory tx = rlpEncodedTx.toRlpItem().toList();
-        address sourceChain = tx[3].toAddress();
+        address burnContract = tx[3].toAddress();
 
         // parse receipt
         RLPReader.RLPItem[] memory receipt = rlpEncodedReceipt.toRlpItem().toList();
@@ -53,11 +53,16 @@ contract NapToken is ERC20, ERC20Detailed {
         // read recipient from chain event
         address recipient = address(chainEvent[2].toUint());
 
-        require(status, "burn transaction was not successful");
+        // check pre-conditions
+        require(burnContract == otherContract, "contract address is not registered");
+        require(status == true, "burn transaction was not successful");
         // todo: verify inclusion of transfer transaction
         // todo: verify inclusion of receipt
+
+        // mint tokens to recipient
         _mint(recipient, value);
-        emit ChainTransfer(sourceChain, address(this), recipient);
+        emit ChainTransfer(burnContract, address(this), recipient);
+        emit BurnSuccessful(status, value);
     }
 
     function transferToChain(address recipient, address destinationContract, uint value) public {

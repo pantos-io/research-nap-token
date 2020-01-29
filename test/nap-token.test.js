@@ -83,7 +83,8 @@ contract('NapToken', (accounts) => {
 
       const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
       const rlpHeader = createRLPHeader(block);
-      const rlpEncodedTx = await createRlpEncodedTx(burnResult.tx);
+      const tx = await web3.eth.getTransaction(burnResult.tx);
+      const rlpEncodedTx = await createRlpEncodedTx(tx);
       const rlpEncodedReceipt = createRlpReceipt(burnResult.receipt);
 
       // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
@@ -107,24 +108,123 @@ contract('NapToken', (accounts) => {
       expect(balance).to.be.bignumber.equal(ether('1.000000000000001000'));
    });
 
-   it('should not claim tokens if source chain does not exist', () => {
+   it('should not claim tokens if the contract that burnt the tokens does not exist', async () => {
+      const sender = accounts[0];
+      const value = '1000';
+      const recipient = accounts[0];
 
+      const burnResult = await sourceNapToken.transferToChain(recipient, destinationNapToken.address, value, {
+         from: sender
+      });
+
+      const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx = await web3.eth.getTransaction(burnResult.tx);
+      const modifiedTx = {
+         ...tx,
+         to: destinationNapToken.address
+      };
+      const rlpEncodedTx = await createRlpEncodedTx(modifiedTx);
+      const rlpHeader = createRLPHeader(block);
+      const rlpEncodedReceipt = createRlpReceipt(burnResult.receipt);
+
+      // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
+      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt/*, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path*/),
+          'contract address is not registered');
+
+      let balance;
+      balance = await sourceNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('0.999999999999999000'));
+
+      balance = await destinationNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('1.000000000000000000'));
    });
 
-   it('should not claim tokens if burn transaction was not successful', () => {
+   it('should not claim tokens if burn transaction was not successful', async () => {
+      const sender = accounts[0];
+      const value = '1000';
+      const recipient = accounts[0];
 
+      const burnResult = await sourceNapToken.transferToChain(recipient, destinationNapToken.address, value, {
+         from: sender
+      });
+
+      const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx = await web3.eth.getTransaction(burnResult.tx);
+      const rlpEncodedTx = await createRlpEncodedTx(tx);
+      const rlpHeader = createRLPHeader(block);
+      const modifiedReceipt = {
+         ...burnResult.receipt,
+         status: false
+      };
+      const rlpEncodedReceipt = createRlpReceipt(modifiedReceipt);
+
+      // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
+      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt/*, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path*/),
+          'burn transaction was not successful');
+
+      let balance;
+      balance = await sourceNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('0.999999999999999000'));
+
+      balance = await destinationNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('1.000000000000000000'));
    });
 
-   it('should not claim tokens if burn transaction is not included in source blockchain', () => {
+   it('should not claim tokens if burn transaction is not included in source blockchain', async () => {
+      const sender = accounts[0];
+      const value = '1000';
+      const recipient = accounts[0];
 
+      const burnResult = await sourceNapToken.transferToChain(recipient, destinationNapToken.address, value, {
+         from: sender
+      });
+
+      const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx = await web3.eth.getTransaction(burnResult.tx);
+      const rlpEncodedTx = await createRlpEncodedTx(tx);
+      const rlpHeader = createRLPHeader(block);
+      const rlpEncodedReceipt = createRlpReceipt(burnResult.receipt);
+
+      // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
+      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt/*, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path*/),
+          'burn transaction does not exist');
+
+      let balance;
+      balance = await sourceNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('0.999999999999999000'));
+
+      balance = await destinationNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('1.000000000000000000'));
    });
 
-   it('should not claim tokens if receipt of burn transaction is not included in source blockchain', () => {
+   it('should not claim tokens if receipt of burn transaction is not included in source blockchain', async () => {
+      const sender = accounts[0];
+      const value = '1000';
+      const recipient = accounts[0];
 
+      const burnResult = await sourceNapToken.transferToChain(recipient, destinationNapToken.address, value, {
+         from: sender
+      });
+
+      const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx = await web3.eth.getTransaction(burnResult.tx);
+      const rlpEncodedTx = await createRlpEncodedTx(tx);
+      const rlpHeader = createRLPHeader(block);
+      const rlpEncodedReceipt = createRlpReceipt(burnResult.receipt);
+
+      // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
+      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt/*, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path*/),
+          'burn receipt does not exist');
+
+      let balance;
+      balance = await sourceNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('0.999999999999999000'));
+
+      balance = await destinationNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('1.000000000000000000'));
    });
 
-   const createRlpEncodedTx = async (txHash) => {
-      const tx = await web3.eth.getTransaction(txHash);
+   const createRlpEncodedTx = async (tx) => {
       const signedTransaction = await web3.eth.accounts.signTransaction({
          nonce: tx.nonce,
          gasPrice: tx.gasPrice,

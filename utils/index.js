@@ -2,6 +2,9 @@ const RLP = require('rlp');
 const Web3 = require('web3');
 const web3 = new Web3(Web3.givenProvider || 'https://mainnet.infura.io', null, {});
 const BN = web3.utils.BN;
+
+const RLP_TRUE = '0x01';
+const RLP_FALSE = '0x00';
 // const BigNumber = require('bignumber.js');
 
 // const calculateBlockHash = (block) => {
@@ -54,7 +57,7 @@ const createRlpReceipt = (receipt) => {
         receipt.gasUsed,
         receipt.logsBloom,
         convertLogs(receipt.rawLogs),
-        receipt.status ? 1 : 0  // convert boolean to binary
+        receipt.status ? RLP_TRUE : RLP_FALSE  // convert boolean to binary
     ]);
 };
 
