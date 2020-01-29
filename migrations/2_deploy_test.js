@@ -6,7 +6,7 @@ module.exports = async function(deployer, network) {
         return;
     }
 
-    await deployer.deploy(TestRelay);
+    await deployer.deploy(TestRelay, 1, 1);
     await deployer.deploy(NapToken, TestRelay.address);
 
 };

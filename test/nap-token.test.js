@@ -5,8 +5,16 @@ const {
     expectRevert, // Assertions for transactions that should fail
     ether,
 } = require('@openzeppelin/test-helpers');
+const {
+   asyncTrieProve,
+   asyncTriePut,
+   newTrie,
+   createRLPHeader,
+   createRLPTransaction,
+   createRLPReceipt
+} = require('../utils');
 const {expect} = require('chai');
-const {createRLPHeader, createRlpReceipt} = require('../utils');
+const RLP = require('rlp');
 
 const NapToken = artifacts.require('NapToken');
 const TestRelay = artifacts.require('TestRelay');
@@ -17,12 +25,16 @@ contract('NapToken', (accounts) => {
    let relayContract;
 
    beforeEach(async () => {
-      relayContract = await TestRelay.deployed();
+      await setupContracts(1, 1);
+   });
+
+   const setupContracts = async (verifyTxResult, verifyReceiptResult) => {
+      relayContract = await TestRelay.new(verifyTxResult, verifyReceiptResult);
       sourceNapToken = await NapToken.new(relayContract.address);
       destinationNapToken = await NapToken.new(relayContract.address);
       await sourceNapToken.registerContract(destinationNapToken.address);
       await destinationNapToken.registerContract(sourceNapToken.address);
-   });
+   };
 
    it('should deploy the source and destination contracts correctly', async () => {
       let balance;
@@ -81,14 +93,18 @@ contract('NapToken', (accounts) => {
          from: sender
       });
 
-      const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
-      const rlpHeader = createRLPHeader(block);
-      const tx = await web3.eth.getTransaction(burnResult.tx);
-      const rlpEncodedTx = await createRlpEncodedTx(tx);
-      const rlpEncodedReceipt = createRlpReceipt(burnResult.receipt);
+      const block             = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx                = await web3.eth.getTransaction(burnResult.tx);
+      const txReceipt         = await web3.eth.getTransactionReceipt(burnResult.tx);
+      const rlpHeader         = createRLPHeader(block);
+      const rlpEncodedTx      = createRLPTransaction(tx);
+      const rlpEncodedReceipt = createRLPReceipt(txReceipt);
 
-      // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
-      const claimResult = await destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt);//, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path);
+      const path = RLP.encode(tx.transactionIndex);
+      const rlpEncodedTxNodes = await createTxMerkleProof(block, tx.transactionIndex);
+      const rlpEncodedReceiptNodes = await createReceiptMerkleProof(block, tx.transactionIndex);
+
+      const claimResult = await destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path);
       expectEvent(claimResult.receipt, 'Transfer', {
          from: constants.ZERO_ADDRESS,
          to: recipient,
@@ -117,18 +133,22 @@ contract('NapToken', (accounts) => {
          from: sender
       });
 
-      const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
-      const tx = await web3.eth.getTransaction(burnResult.tx);
+      const block             = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx                = await web3.eth.getTransaction(burnResult.tx);
+      const txReceipt         = await web3.eth.getTransactionReceipt(burnResult.tx);
+      const rlpHeader         = createRLPHeader(block);
+      const rlpEncodedReceipt = createRLPReceipt(txReceipt);
       const modifiedTx = {
          ...tx,
          to: destinationNapToken.address
       };
-      const rlpEncodedTx = await createRlpEncodedTx(modifiedTx);
-      const rlpHeader = createRLPHeader(block);
-      const rlpEncodedReceipt = createRlpReceipt(burnResult.receipt);
+      const rlpEncodedTx = createRLPTransaction(modifiedTx);
 
-      // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
-      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt/*, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path*/),
+      const path = RLP.encode(tx.transactionIndex);
+      const rlpEncodedTxNodes = await createTxMerkleProof(block, tx.transactionIndex);
+      const rlpEncodedReceiptNodes = await createReceiptMerkleProof(block, tx.transactionIndex);
+
+      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path),
           'contract address is not registered');
 
       let balance;
@@ -148,18 +168,22 @@ contract('NapToken', (accounts) => {
          from: sender
       });
 
-      const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
-      const tx = await web3.eth.getTransaction(burnResult.tx);
-      const rlpEncodedTx = await createRlpEncodedTx(tx);
-      const rlpHeader = createRLPHeader(block);
+      const block             = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx                = await web3.eth.getTransaction(burnResult.tx);
+      const txReceipt         = await web3.eth.getTransactionReceipt(burnResult.tx);
+      const rlpHeader         = createRLPHeader(block);
+      const rlpEncodedTx      = createRLPTransaction(tx);
       const modifiedReceipt = {
-         ...burnResult.receipt,
+         ...txReceipt,
          status: false
       };
-      const rlpEncodedReceipt = createRlpReceipt(modifiedReceipt);
+      const rlpEncodedReceipt = createRLPReceipt(modifiedReceipt);
 
-      // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
-      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt/*, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path*/),
+      const path = RLP.encode(tx.transactionIndex);
+      const rlpEncodedTxNodes = await createTxMerkleProof(block, tx.transactionIndex);
+      const rlpEncodedReceiptNodes = await createReceiptMerkleProof(block, tx.transactionIndex);
+
+      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path),
           'burn transaction was not successful');
 
       let balance;
@@ -171,6 +195,7 @@ contract('NapToken', (accounts) => {
    });
 
    it('should not claim tokens if burn transaction is not included in source blockchain', async () => {
+      await setupContracts(0, 1);
       const sender = accounts[0];
       const value = '1000';
       const recipient = accounts[0];
@@ -179,14 +204,18 @@ contract('NapToken', (accounts) => {
          from: sender
       });
 
-      const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
-      const tx = await web3.eth.getTransaction(burnResult.tx);
-      const rlpEncodedTx = await createRlpEncodedTx(tx);
-      const rlpHeader = createRLPHeader(block);
-      const rlpEncodedReceipt = createRlpReceipt(burnResult.receipt);
+      const block             = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx                = await web3.eth.getTransaction(burnResult.tx);
+      const txReceipt         = await web3.eth.getTransactionReceipt(burnResult.tx);
+      const rlpHeader         = createRLPHeader(block);
+      const rlpEncodedTx      = createRLPTransaction(tx);
+      const rlpEncodedReceipt = createRLPReceipt(txReceipt);
 
-      // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
-      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt/*, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path*/),
+      const path = RLP.encode(tx.transactionIndex);
+      const rlpEncodedTxNodes = await createTxMerkleProof(block, tx.transactionIndex);
+      const rlpEncodedReceiptNodes = await createReceiptMerkleProof(block, tx.transactionIndex);
+
+      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path),
           'burn transaction does not exist');
 
       let balance;
@@ -198,6 +227,7 @@ contract('NapToken', (accounts) => {
    });
 
    it('should not claim tokens if receipt of burn transaction is not included in source blockchain', async () => {
+      await setupContracts(1, 0);
       const sender = accounts[0];
       const value = '1000';
       const recipient = accounts[0];
@@ -206,14 +236,18 @@ contract('NapToken', (accounts) => {
          from: sender
       });
 
-      const block = await web3.eth.getBlock(burnResult.receipt.blockHash);
-      const tx = await web3.eth.getTransaction(burnResult.tx);
-      const rlpEncodedTx = await createRlpEncodedTx(tx);
-      const rlpHeader = createRLPHeader(block);
-      const rlpEncodedReceipt = createRlpReceipt(burnResult.receipt);
+      const block             = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx                = await web3.eth.getTransaction(burnResult.tx);
+      const txReceipt         = await web3.eth.getTransactionReceipt(burnResult.tx);
+      const rlpHeader         = createRLPHeader(block);
+      const rlpEncodedTx      = createRLPTransaction(tx);
+      const rlpEncodedReceipt = createRLPReceipt(txReceipt);
 
-      // let rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path;
-      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt/*, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path*/),
+      const path = RLP.encode(tx.transactionIndex);
+      const rlpEncodedTxNodes = await createTxMerkleProof(block, tx.transactionIndex);
+      const rlpEncodedReceiptNodes = await createReceiptMerkleProof(block, tx.transactionIndex);
+
+      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path),
           'burn receipt does not exist');
 
       let balance;
@@ -224,16 +258,75 @@ contract('NapToken', (accounts) => {
       expect(balance).to.be.bignumber.equal(ether('1.000000000000000000'));
    });
 
-   const createRlpEncodedTx = async (tx) => {
-      const signedTransaction = await web3.eth.accounts.signTransaction({
-         nonce: tx.nonce,
-         gasPrice: tx.gasPrice,
-         gas: tx.gas,
-         to: tx.to,
-         value: tx.value,
-         input: tx.input
-      }, '0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362311');  // private key can be anything if the transaction is not sent
-      return web3.utils.hexToBytes(signedTransaction.rawTransaction);
+   it('should not allow tokens to be claimed twice', async () => {
+      const sender = accounts[0];
+      const value = '1000';
+      const recipient = accounts[0];
+
+      const burnResult = await sourceNapToken.transferToChain(recipient, destinationNapToken.address, value, {
+         from: sender
+      });
+
+      const block             = await web3.eth.getBlock(burnResult.receipt.blockHash);
+      const tx                = await web3.eth.getTransaction(burnResult.tx);
+      const txReceipt         = await web3.eth.getTransactionReceipt(burnResult.tx);
+      const rlpHeader         = createRLPHeader(block);
+      const rlpEncodedTx      = createRLPTransaction(tx);
+      const rlpEncodedReceipt = createRLPReceipt(txReceipt);
+
+      const path = RLP.encode(tx.transactionIndex);
+      const rlpEncodedTxNodes = await createTxMerkleProof(block, tx.transactionIndex);
+      const rlpEncodedReceiptNodes = await createReceiptMerkleProof(block, tx.transactionIndex);
+
+      const claimResult = await destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path);
+      expectEvent(claimResult.receipt, 'Transfer', {
+         from: constants.ZERO_ADDRESS,
+         to: recipient,
+         value: value,
+      });
+      expectEvent(claimResult.receipt, 'ChainTransfer', {
+         source: sourceNapToken.address,
+         destination: destinationNapToken.address,
+         recipient: recipient
+      });
+
+      await expectRevert(destinationNapToken.transferFromChain(rlpHeader, rlpEncodedTx, rlpEncodedReceipt, rlpEncodedTxNodes, rlpEncodedReceiptNodes, path),
+          'tokens have already been claimed');
+
+      let balance;
+      balance = await sourceNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('0.999999999999999000'));
+
+      balance = await destinationNapToken.balanceOf(accounts[0]);
+      expect(balance).to.be.bignumber.equal(ether('1.000000000000001000'));
+   });
+
+   const createTxMerkleProof = async (block, transactionIndex) => {
+      const trie = newTrie();
+
+      for (let i=0; i<block.transactions.length; i++) {
+         const tx = await web3.eth.getTransaction(block.transactions[i]);
+         const rlpTx = createRLPTransaction(tx);
+         const key = RLP.encode(i);
+         await asyncTriePut(trie, key, rlpTx);
+      }
+
+      const key = RLP.encode(transactionIndex);
+      return RLP.encode(await asyncTrieProve(trie, key));
    };
+
+   const createReceiptMerkleProof = async (block, transactionIndex) => {
+      const trie = newTrie();
+
+      for (let i=0; i<block.transactions.length; i++) {
+         const receipt = await web3.eth.getTransactionReceipt(block.transactions[i]);
+         const rlpReceipt = createRLPReceipt(receipt);
+         const key = RLP.encode(i);
+         await asyncTriePut(trie, key, rlpReceipt);
+      }
+
+      const key = RLP.encode(transactionIndex);
+      return RLP.encode(await asyncTrieProve(trie, key));
+   }
 
 });

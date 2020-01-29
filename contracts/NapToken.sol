@@ -8,8 +8,16 @@ contract NapToken is ERC20, ERC20Detailed {
     using RLPReader for RLPReader.RLPItem;
     using RLPReader for bytes;
 
+    struct Claim {
+        address burnContract;
+        address recipient;
+        uint value;
+        bool valid;
+    }
+
     RelayContract relay;
     address otherContract;
+    mapping(bytes32 => bool) claimedTransactions;
 
     constructor(address _relayAddress) ERC20Detailed("NapToken", "NAP", 18) public {
         relay = RelayContract(_relayAddress);
@@ -26,49 +34,63 @@ contract NapToken is ERC20, ERC20Detailed {
         otherContract = _contractAddress;
     }
 
-    function transferFromChain(
-        bytes memory rlpHeader,
-        bytes memory rlpEncodedTx,
-        bytes memory rlpEncodedReceipt
-//        bytes memory rlpEncodedTxNodes,
-//        bytes memory rlpEncodedReceiptNodes,
-//        bytes memory path
-    ) public payable {
-        // parse transaction
-        RLPReader.RLPItem[] memory tx = rlpEncodedTx.toRlpItem().toList();
-        address burnContract = tx[3].toAddress();
-
-        // parse receipt
-        RLPReader.RLPItem[] memory receipt = rlpEncodedReceipt.toRlpItem().toList();
-        bool status = receipt[3].toBoolean();
-        RLPReader.RLPItem[] memory logs = receipt[2].toList();
-
-        // read logs
-        RLPReader.RLPItem[] memory transferEvent = logs[0].toList();
-        RLPReader.RLPItem[] memory chainEvent = logs[1].toList();
-
-        // read value from transfer event
-        uint value = transferEvent[2].toUint();
-
-        // read recipient from chain event
-        address recipient = address(chainEvent[2].toUint());
-
-        // check pre-conditions
-        require(burnContract == otherContract, "contract address is not registered");
-        require(status == true, "burn transaction was not successful");
-        // todo: verify inclusion of transfer transaction
-        // todo: verify inclusion of receipt
-
-        // mint tokens to recipient
-        _mint(recipient, value);
-        emit ChainTransfer(burnContract, address(this), recipient);
-        emit BurnSuccessful(status, value);
-    }
-
     function transferToChain(address recipient, address destinationContract, uint value) public {
         require(destinationContract == otherContract, "contract address is not registered");
         _burn(msg.sender, value);
         emit ChainTransfer(address(this), destinationContract, recipient);
+    }
+
+    function transferFromChain(
+        bytes memory rlpHeader,
+        bytes memory rlpEncodedTx,
+        bytes memory rlpEncodedReceipt,
+        bytes memory rlpMerkleProofTx,
+        bytes memory rlpMerkleProofReceipt,
+        bytes memory path
+    ) public payable {
+
+        Claim memory c = extractClaim(rlpEncodedTx, rlpEncodedReceipt);
+
+        // check pre-conditions
+        require(claimedTransactions[keccak256(rlpEncodedTx)] == false, "tokens have already been claimed");
+        require(c.burnContract == otherContract, "contract address is not registered");
+        require(c.valid == true, "burn transaction was not successful");
+
+        // verify inclusion of transfer transaction
+        uint txExists = relay.verifyTransaction(0, rlpHeader, 0, rlpEncodedTx, path, rlpMerkleProofTx);
+        require(txExists == 1, "burn transaction does not exist");
+
+        // verify inclusion of receipt
+        uint receiptExists = relay.verifyReceipt(0, rlpHeader, 0, rlpEncodedReceipt, path, rlpMerkleProofReceipt);
+        require(receiptExists == 1, "burn receipt does not exist");
+
+        // mint tokens to recipient
+        claimedTransactions[keccak256(rlpEncodedTx)] = true; // IMPORTANT: invalidate tx for further claims
+        _mint(c.recipient, c.value);
+        emit ChainTransfer(c.burnContract, address(this), c.recipient);
+        emit BurnSuccessful(c.valid, c.value);
+    }
+
+    function extractClaim(bytes memory rlpTransaction, bytes memory rlpReceipt) private returns (Claim memory) {
+        Claim memory c;
+        // parse transaction
+        RLPReader.RLPItem[] memory tx = rlpTransaction.toRlpItem().toList();
+        c.burnContract = tx[3].toAddress();
+
+        // parse receipt
+        RLPReader.RLPItem[] memory receipt = rlpReceipt.toRlpItem().toList();
+        c.valid = receipt[3].toBoolean();
+
+        // read logs
+        RLPReader.RLPItem[] memory logs = receipt[2].toList();
+        RLPReader.RLPItem[] memory transferEvent = logs[0].toList();
+        RLPReader.RLPItem[] memory chainEvent = logs[1].toList();
+
+        // read value and recipient from transfer and chain event
+        c.value = transferEvent[2].toUint();
+        c.recipient = address(chainEvent[2].toUint());
+
+        return c;
     }
 
     event ChainTransfer(address indexed source, address indexed destination, address recipient);
