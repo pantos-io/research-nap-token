@@ -68,7 +68,6 @@ contract NapToken is ERC20, ERC20Detailed {
         claimedTransactions[keccak256(rlpEncodedTx)] = true; // IMPORTANT: invalidate tx for further claims
         _mint(c.recipient, c.value);
         emit ChainTransfer(c.burnContract, address(this), c.recipient);
-        emit BurnSuccessful(c.valid, c.value);
     }
 
     function extractClaim(bytes memory rlpTransaction, bytes memory rlpReceipt) private returns (Claim memory) {
@@ -94,5 +93,4 @@ contract NapToken is ERC20, ERC20Detailed {
     }
 
     event ChainTransfer(address indexed source, address indexed destination, address recipient);
-    event BurnSuccessful(bool status, uint value);
 }
