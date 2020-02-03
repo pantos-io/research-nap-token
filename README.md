@@ -15,18 +15,27 @@ with no other user involved.
 
 The workflow of transferring a token from one chain to another consists of the following steps.
 1. Burn tokens on the source blockchain.
-2. Create a [Simplified Payment Verification (SPV)]() of the transaction burning the tokens.
-3. Claim the tokens on the destination blockchain using the SPV of the burn transaction.
-    * If the SPV is _valid_, the tokens (re-)created on the destination blockchain.
-    * If the SPV is _invalid_, the claim is denied.
-    
+2. Create a proof of the transaction burning the tokens.
+3. Claim the tokens on the destination blockchain using the proof.
+    * If the proof is _valid_, the tokens (re-)created on the destination blockchain.
+    * If the proof is _invalid_, the claim is denied.
+
+To create proofs of transactions, we can leverage the concept of Simplified Payment Verification (SPV).
+SPV is explained by the [Bitcoin Whitepaper](https://bitcoin.org/bitcoin.pdf) as follows:  
+> It is possible to verify payments without running a full network node. A user only needs to keep
+  a copy of the block headers of the longest proof-of-work chain, which he can get by querying
+  network nodes until he's convinced he has the longest chain, and obtain the Merkle branch
+  linking the transaction to the block it's timestamped in. He can't check the transaction for
+  himself, but by linking it to a place in the chain, he can see that a network node has accepted it,
+  and blocks added after it further confirm the network has accepted it.
+
 Evidently, the smart contract on the destination blockchain implementing the token needs a way to
-reliably validate SPVs for the source blockchain. 
+reliably validate an SPV of a burn transaction that has taken place on the source blockchain. 
 
 For this, NAP makes use of [Testimonium](https://www.github.com/pantos-io/testimonium)––a blockchain relay
 which continuously relays block headers from the source blockchain to the destination blockchain. 
-Testimonium makes sure that SPVs cannot be submitted for illegal block headers of the source blockchain in a 
-fully decentralized manner.
+Testimonium makes sure that SPVs cannot be submitted for illegal block headers of the source 
+blockchain––all while remaining fully decentralized.
 
 So far, NAP consists of a smart contract implemented in Solidity, as such it is available for Ethereum-based blockchains.
 
