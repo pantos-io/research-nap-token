@@ -12,7 +12,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@openzeppelin/contracts": "^2.4.0",
+    "@openzeppelin/contracts": "^4.7.2",
     "bl": "^4.0.3",
     "solidity-rlp": "^2.0.1"
   },
